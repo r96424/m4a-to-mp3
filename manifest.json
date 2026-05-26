@@ -1,0 +1,21 @@
+{
+  "name": "M4A to MP3 変換",
+  "short_name": "M4A変換",
+  "description": "M4AファイルをMP3に変換するアプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#007aff",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/007aff/ffffff?text=M4A",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/007aff/ffffff?text=M4A",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

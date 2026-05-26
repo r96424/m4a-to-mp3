@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>M4A → MP3 変換</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, sans-serif;
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f5f5f7;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    color: #1d1d1f;
+    margin: 20px 0 30px;
+    font-size: 24px;
+  }
+  .drop-zone {
+    border: 2px dashed #007aff;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    background: white;
+    margin-bottom: 20px;
+  }
+  .drop-zone p {
+    color: #6e6e73;
+    margin-bottom: 16px;
+  }
+  input[type="file"] { display: none; }
+  .btn {
+    background: #007aff;
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-size: 16px;
+    width: 100%;
+    margin: 8px 0;
+    cursor: pointer;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    line-height: 1.5;
+  }
+  .btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+  .btn-label {
+    background: #007aff;
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: 10px;
+    font-size: 16px;
+    width: 100%;
+    margin: 8px 0;
+    cursor: pointer;
+    display: block;
+    text-align: center;
+  }
+  .progress {
+    width: 100%;
+    height: 8px;
+    background: #e5e5ea;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 10px 0;
+  }
+  .progress-bar {
+    height: 100%;
+    background: #34c759;
+    width: 0%;
+    transition: width 0.3s;
+  }
+  .file-info {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin: 10px 0;
+  }
+  .file-name {
+    font-size: 14px;
+    color: #3a3a3c;
+    margin-bottom: 12px;
+    word-break: break-all;
+  }
+  select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #d2d2d7;
+    font-size: 16px;
+    margin-bottom: 10px;
+    background: white;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .status {
+    text-align: center;
+    font-size: 14px;
+    color: #6e6e73;
+    margin: 8px 0;
+    min-height: 20px;
+  }
+  .note {
+    font-size: 12px;
+    color: #8e8e93;
+    text-align: center;
+    margin-top: 30px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+  <h1>🎵 M4A → MP3</h1>
+
+  <div class="drop-zone">
+    <p>M4Aファイルを選択してください</p>
+    <label for="file" class="btn-label">📁 ファイルを選ぶ</label>
+    <input type="file" id="file" accept="audio/*,.m4a">
+  </div>
+
+  <div id="info" class="file-info" style="display:none">
+    <div id="fileName" class="file-name"></div>
+    <select id="bitrate">
+      <option value="128">128 kbps（軽量）</option>
+      <option value="192" selected>192 kbps（標準）</option>
+      <option value="320">320 kbps（高音質）</option>
+    </select>
+    <button id="convertBtn" class="btn">🔄 変換開始</button>
+    <div class="progress">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <a id="downloadLink" style="display:none"></a>
+
+  <p class="note">
+    ファイルはブラウザ内で処理されます<br>
+    サーバーにアップロードされません🔒
+  </p>
+
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script>
+  const { FFmpeg } = FFmpegWASM;
+  const { fetchFile } = FFmpegUtil;
+  const ffmpeg = new FFmpeg();
+  let selectedFile = null;
+
+  document.getElementById('file').addEventListener('change', (e) => {
+    selectedFile = e.target.files[0];
+    if (selectedFile) {
+      document.getElementById('fileName').textContent =
+        `📄 ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)}MB)`;
+      document.getElementById('info').style.display = 'block';
+      document.getElementById('downloadLink').style.display = 'none';
+      document.getElementById('status').textContent = '';
+      document.getElementById('progressBar').style.width = '0%';
+    }
+  });
+
+  document.getElementById('convertBtn').addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    const btn = document.getElementById('convertBtn');
+    const status = document.getElementById('status');
+    const progressBar = document.getElementById('progressBar');
+    const link = document.getElementById('downloadLink');
+
+    btn.disabled = true;
+    link.style.display = 'none';
+    progressBar.style.width = '0%';
+
+    try {
+      if (!ffmpeg.loaded) {
+        status.textContent = '⏳ 変換エンジン読込中...（初回のみ時間がかかります）';
+        await ffmpeg.load();
+      }
+
+      ffmpeg.on('progress', ({ progress }) => {
+        progressBar.style.width = (Math.min(progress, 1) * 100) + '%';
+      });
+
+      const bitrate = document.getElementById('bitrate').value;
+      const baseName = selectedFile.name.replace(/\.m4a$/i, '');
+      const outputName = baseName + '.mp3';
+
+      status.textContent = '🔄 変換中...画面を閉じないでください';
+      await ffmpeg.writeFile('input.m4a', await fetchFile(selectedFile));
+      await ffmpeg.exec(['-i', 'input.m4a', '-b:a', `${bitrate}k`, 'output.mp3']);
+      const data = await ffmpeg.readFile('output.mp3');
+
+      const blob = new Blob([data.buffer], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+
+      link.href = url;
+      link.download = outputName;
+      link.textContent = `⬇️ ${outputName} をダウンロード`;
+      link.className = 'btn';
+      link.style.display = 'block';
+      link.style.marginTop = '10px';
+
+      status.textContent = '✅ 完了！下のボタンをタップして保存';
+      progressBar.style.width = '100%';
+
+    } catch (err) {
+      status.textContent = '❌ エラーが発生しました: ' + err.message;
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
