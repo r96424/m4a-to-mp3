@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>M4A → MP3 変換</title>
+<title>M4A → MP4 変換</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -69,7 +69,7 @@
 </style>
 </head>
 <body>
-  <h1>🎵 M4A → MP3</h1>
+  <h1>🎬 M4A → MP4</h1>
 
   <div class="drop-zone">
     <p>M4Aファイルを選択してください</p>
@@ -79,10 +79,10 @@
 
   <div id="info" class="file-info" style="display:none">
     <div id="fileName" class="file-name"></div>
-    <select id="bitrate">
-      <option value="128">128 kbps（軽量）</option>
-      <option value="192" selected>192 kbps（標準）</option>
-      <option value="320">320 kbps（高音質）</option>
+    <select id="quality">
+      <option value="low">低画質（ファイル小）</option>
+      <option value="medium" selected>標準画質</option>
+      <option value="high">高画質（ファイル大）</option>
     </select>
     <button id="convertBtn" class="btn">🔄 変換開始</button>
     <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
@@ -138,16 +138,30 @@
         progressBar.style.width = (Math.min(ratio, 1) * 100) + '%';
       });
 
-      const bitrate = document.getElementById('bitrate').value;
+      // 画質設定
+      const quality = document.getElementById('quality').value;
+      const crf = quality === 'low' ? '35' : quality === 'medium' ? '28' : '20';
+
       const baseName = selectedFile.name.replace(/\.m4a$/i, '');
-      const outputName = baseName + '.mp3';
+      const outputName = baseName + '.mp4';
 
       status.textContent = '🔄 変換中...画面を閉じないでください';
       ffmpeg.FS('writeFile', 'input.m4a', await fetchFile(selectedFile));
-      await ffmpeg.run('-i', 'input.m4a', '-b:a', `${bitrate}k`, 'output.mp3');
-      const data = ffmpeg.FS('readFile', 'output.mp3');
 
-      const blob = new Blob([data.buffer], { type: 'audio/mpeg' });
+      // 音声のみのm4aを黒画面付きmp4に変換
+      await ffmpeg.run(
+        '-f', 'lavfi',
+        '-i', 'color=c=black:size=640x360:rate=1',
+        '-i', 'input.m4a',
+        '-c:v', 'libx264',
+        '-crf', crf,
+        '-c:a', 'aac',
+        '-shortest',
+        'output.mp4'
+      );
+
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const blob = new Blob([data.buffer], { type: 'video/mp4' });
       const url = URL.createObjectURL(blob);
 
       link.href = url;
